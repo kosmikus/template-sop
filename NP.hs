@@ -114,19 +114,32 @@ data A = MkA1 Int Char Bool | MkA2 Double
 
 data B = MkB { getInt :: Int, getCh :: Char, getBool :: Bool }
 
-data C = C1 | C2 | C3
+data C = C1 | C2 | C3 | C4 | C5
   deriving (Show, Lift)
 
 instance Generic C where
-  type Description C = '[ '[], '[], '[] ]
+  type Description C = '[ '[], '[], '[], '[], '[] ]
 
   oto (SOP (Z Nil)) = C1
   oto (SOP (S (Z Nil))) = C2
   oto (SOP (S (S (Z Nil)))) = C3
+  oto (SOP (S (S (S (Z Nil))))) = C4
+  oto (SOP (S (S (S (S (Z Nil)))))) = C5
 
   to (SOP (Z Nil)) = [|| C1 ||]
   to (SOP (S (Z Nil))) = [|| C2 ||]
   to (SOP (S (S (Z Nil)))) = [|| C3 ||]
+  to (SOP (S (S (S (Z Nil))))) = [|| C4 ||]
+  to (SOP (S (S (S (S (Z Nil)))))) = [|| C5 ||]
+
+  from a k =
+    [|| case $$a of
+          C1 -> $$(k (SOP (Z Nil)))
+          C2 -> $$(k (SOP (S (Z Nil))))
+          C3 -> $$(k (SOP (S (S (Z Nil)))))
+          C4 -> $$(k (SOP (S (S (S (Z Nil))))))
+          C5 -> $$(k (SOP (S (S (S (S (Z Nil)))))))
+    ||]
 
 {-
 fromA :: A -> SOP I '[ '[Int, Char, Bool], '[Double] ]
@@ -154,6 +167,7 @@ class Generic a where
   oto :: SOP I (Description a) -> a
   to :: SOP CodeF (Description a) -> Code a
 
+{-
 from' :: forall a r . Generic a => Code a -> (SOP CodeF (Description a) -> Code r) -> Code r
 from' ca k =
   [|| let
@@ -162,7 +176,7 @@ from' ca k =
       in
         $$(k (go (ofrom $$ca)))
   ||]
-
+-}
 
 
 instance Generic A where
@@ -379,3 +393,26 @@ ggetters = np (map_NP (\ f -> Comp (Comp [|| \ a -> $$(from [|| a ||] (unComp . 
 
 gsetters :: forall s x . (Generic s, Description s ~ '[ x ], SListI x) => Code (NP (Setter' s) x)
 gsetters = np (map_NP (\ (Setter f) -> Comp (Comp [|| Setter' (\ a s -> $$(from [|| s ||] (\ sop -> to (SOP (Z (f (Comp [|| a ||]) (unZ (unSOP sop)))))))) ||])) npsetters)
+
+ogcompare :: (Generic a, All (All Ord) (Description a)) => a -> a -> Ordering
+ogcompare x y = go (unSOP (ofrom x)) (unSOP (ofrom y))
+  where
+    go :: forall xss . All (All Ord) xss => NS (NP I) xss -> NS (NP I) xss -> Ordering
+    go (Z x) (Z y) = mconcat (ocollapse_NP (czipWith_NP @Ord (\ (I a) (I b) -> K (compare a b)) x y))
+    go (Z _) (S _) = LT
+    go (S _) (Z _) = GT
+
+czipWith_NP :: forall c xs f g h . All c xs => (forall x . c x => f x -> g x -> h x) -> NP f xs -> NP g xs -> NP h xs
+czipWith_NP p  Nil Nil = Nil
+czipWith_NP p (f :* fs) (g :* gs) = p f g :* czipWith_NP @c p fs gs
+
+gcompare :: (Generic a, All (All Ord) (Description a)) => Code (a -> a -> Ordering)
+gcompare =
+  [|| \ x y -> $$(from [|| x ||] (\ x' -> from [|| y ||] (\ y' -> go (unSOP x') (unSOP y')))) ||]
+  where
+    go :: forall xss . All (All Ord) xss => NS (NP CodeF) xss -> NS (NP CodeF) xss -> Code Ordering
+    go (Z x) (Z y) = capply [|| foldr (<>) EQ ||] (collapse_NP (czipWith_NP @Ord (\ (Comp a) (Comp b) -> K [|| compare $$a $$b ||]) x y))
+    go (Z _) (S _) = [|| LT ||]
+    go (S _) (Z _) = [|| GT ||]
+    go (S x) (S y) = go x y
+

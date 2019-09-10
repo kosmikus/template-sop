@@ -34,6 +34,12 @@ gettersR = $$ggetters
 settersR :: NP (Setter' R) '[ A, B, C ]
 settersR = $$gsetters
 
+compareA :: A -> A -> Ordering
+compareA = $$gcompare
+
+compareC :: C -> C -> Ordering
+compareC = $$gcompare
+
 --
 -- dumb (MkA1 i c b) = sum [1, 1, 1]
 -- dumb (MkA2 d)     = sum [1]
