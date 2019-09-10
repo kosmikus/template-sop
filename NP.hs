@@ -78,7 +78,7 @@ ns :: NS (CodeF :.: f) xs -> Code (NS f xs)
 ns (Z (Comp (Comp c))) = [|| Z $$c ||]
 ns (S x)               = [|| S $$(ns x) ||]
 
-collapse_NS :: NS (K (Code a)) xs -> Code a
+collapse_NS :: NS (K a) xs -> a
 collapse_NS (Z (K a)) = a
 collapse_NS (S y)     = collapse_NS y
 
@@ -459,3 +459,35 @@ gcompare =
     go (S _) (Z _) = [|| GT ||]
     go (S x) (S y) = go x y
 
+select :: NP (f -.-> g) xs -> NS f xs -> NS g xs
+select (f :* _)  (Z x) = Z (apFn f x)
+select (_ :* fs) (S y) = S (select fs y)
+
+ogcase :: (Generic a) => NP (NP I -.-> K r) (Description a) -> a -> r
+ogcase table a = collapse_NS (select table (unSOP (ofrom a)))
+
+gcase :: (Generic a) => NP (CodeF :.: (NP I -.-> K r)) (Description a) -> Code (a -> r)
+gcase table =
+  [|| \ a -> $$(from [|| a ||] (\ a' -> collapse_NS (select (map_NP (capply' . unComp . unComp) table) (unSOP a')))) ||]
+
+capply' :: Code ((NP I -.-> K r) x) -> (NP CodeF -.-> K (Code r)) x
+capply' cf = Fn (\ npc -> K [|| unK (apFn $$cf $$(np (map_NP (\ (Comp x) -> Comp (Comp (capply [|| I ||] x))) npc))) ||])
+
+unspillNP :: forall xs f r . SListI xs => Code (NP f xs) -> (NP (CodeF :.: f) xs -> Code r) -> Code r
+unspillNP cnp k = case sList :: SList xs of
+  SNil  -> k Nil
+  SCons ->
+    [|| elimNPCons $$cnp (\ x xs -> $$(unspillNP [|| xs ||] (\ xs' -> k (Comp (Comp [|| x ||]) :* xs'))))
+    ||]
+
+elimNPCons :: SListI xs => NP f (x : xs) -> (f x -> NP f xs -> r) -> r
+elimNPCons (x :* xs) k = k x xs
+
+type family Curry (xs :: [Type]) (r :: Type) :: Type where
+  Curry '[] r = r
+  Curry (x : xs) r = x -> Curry xs r
+
+curryNP :: forall xs r . SListI xs => (NP I xs -> r) -> Curry xs r
+curryNP k = case sList :: SList xs of
+  SNil -> k Nil
+  SCons -> \ x -> curryNP (\ xs -> k (I x :* xs))
