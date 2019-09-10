@@ -153,6 +153,17 @@ class Generic a where
   oto :: SOP I (Description a) -> a
   to :: SOP CodeF (Description a) -> Code a
 
+from' :: forall a r . Generic a => Code a -> (SOP CodeF (Description a) -> Code r) -> Code r
+from' ca k =
+  [|| let
+        go :: SOP I xss -> SOP CodeF xss
+        go = undefined
+      in
+        $$(k (go (ofrom $$ca)))
+  ||]
+
+
+
 instance Generic A where
   type Description A = '[ '[Int, Char, Bool], '[Double] ]
   from = fromA
