@@ -16,10 +16,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Experiment where
 
+import Language.Haskell.TH
 import NP
 
-dumb :: A -> Int
-dumb a = $$(fromA [|| a ||] (capply [|| sum ||] . collapse_SOP . map_SOP (const (K [|| 1 ||]))))
+countA :: A -> Int
+countA = $$gcount
+
+showA :: A -> String
+showA = $$gshow
 --
 -- dumb (MkA1 i c b) = sum [1, 1, 1]
 -- dumb (MkA2 d)     = sum [1]

@@ -1,9 +1,12 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveLift #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes #-}
@@ -14,6 +17,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 module NP where
 
 import Data.Kind
@@ -64,12 +68,23 @@ map_NP :: (forall x . f x -> g x) -> NP f xs -> NP g xs
 map_NP f Nil       = Nil
 map_NP f (x :* xs) = f x :* map_NP f xs
 
+cmap_NP :: forall c f g xs . All c xs => (forall x . c x => f x -> g x) -> NP f xs -> NP g xs
+cmap_NP f Nil       = Nil
+cmap_NP f (x :* xs) = f x :* cmap_NP @c f xs
+
 map_NS :: (forall x . f x -> g x) -> NS f xs -> NS g xs
 map_NS f (Z x) = Z (f x)
 map_NS f (S y) = S (map_NS f y)
 
+cmap_NS :: forall c f g xs . All c xs => (forall x . c x => f x -> g x) -> NS f xs -> NS g xs
+cmap_NS f (Z x) = Z (f x)
+cmap_NS f (S y) = S (cmap_NS @c f y)
+
 map_SOP :: (forall x . f x -> g x) -> SOP f xss -> SOP g xss
 map_SOP f (SOP x) = SOP (map_NS (map_NP f) x)
+
+cmap_SOP :: forall c f g xss . All (All c) xss => (forall x . c x => f x -> g x) -> SOP f xss -> SOP g xss
+cmap_SOP f (SOP x) = SOP (cmap_NS @(All c) (cmap_NP @c f) x)
 
 sop :: SOP (Q :.: TExp) xss -> Code (SOP I xss)
 sop (SOP x) = [|| SOP $$(ns (map_NS (\ y -> Comp (Comp (np y))) x)) ||]
@@ -100,6 +115,14 @@ fromA a k =
         MkA2 d     -> $$(k (fromA2 [|| d ||]))
   ||]
 
+class Generic a where
+  type Description a :: [[Type]]
+  from :: Code a -> (SOP (Q :.: TExp) (Description a) -> Code r) -> Code r
+
+instance Generic A where
+  type Description A = '[ '[Int, Char, Bool], '[Double] ]
+  from = fromA
+
 fromB :: Code B -> NP (Q :.: TExp) '[Int, Char, Bool]
 fromB cb = Comp [|| getInt $$cb ||] :* Comp [|| getCh $$cb ||] :* Comp [|| getBool $$cb ||] :* Nil
 
@@ -116,9 +139,12 @@ instance SListI '[] where
 instance SListI xs => SListI (x : xs) where
   sList = SCons
 
-type family All (c :: k -> Constraint) (xs :: [k]) :: Constraint where
-  All c '[] = ()
-  All c (x : xs) = (c x, All c xs)
+class AllF c xs => All (c :: k -> Constraint) xs
+instance AllF c xs => All c xs
+
+type family AllF (c :: k -> Constraint) (xs :: [k]) :: Constraint where
+  AllF c '[] = ()
+  AllF c (x : xs) = (c x, AllF c xs)
 
 newtype K a b = K a
 newtype I a   = I a
@@ -196,3 +222,10 @@ instance Default Char where
 instance Default Bool where
   def = False
 
+gcount :: forall a . Generic a => Code (a -> Int)
+gcount =
+  [|| \ a -> $$(from [|| a ||] (capply [|| sum ||] . collapse_SOP . map_SOP (const (K [|| 1 ||])))) ||]
+
+gshow :: forall a . (Generic a, All (All Show) (Description a)) => Code (a -> String)
+gshow =
+  [|| \ a -> $$(from [|| a ||] (capply [|| concat ||] . collapse_SOP . cmap_SOP @Show (\ (Comp x) -> K (capply [|| show ||] x)))) ||]
