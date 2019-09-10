@@ -117,6 +117,9 @@ data B = MkB { getInt :: Int, getCh :: Char, getBool :: Bool }
 data C = C1 | C2 | C3 | C4 | C5
   deriving (Show, Lift)
 
+instance HasDatatypeInfo C where
+  datatypeInfo = [("C1", 0), ("C2", 0), ("C3", 0), ("C4", 0), ("C5", 0)]
+
 instance Generic C where
   type Description C = '[ '[], '[], '[], '[], '[] ]
 
@@ -167,6 +170,9 @@ class Generic a where
   oto :: SOP I (Description a) -> a
   to :: SOP CodeF (Description a) -> Code a
 
+class HasDatatypeInfo a where
+  datatypeInfo :: [(String, Int)]
+
 {-
 from' :: forall a r . Generic a => Code a -> (SOP CodeF (Description a) -> Code r) -> Code r
 from' ca k =
@@ -182,6 +188,9 @@ from' ca k =
 instance Generic A where
   type Description A = '[ '[Int, Char, Bool], '[Double] ]
   from = fromA
+
+instance HasDatatypeInfo A where
+  datatypeInfo = [("A1", 3), ("A2", 1)]
 
 fromB :: Code B -> NP CodeF '[Int, Char, Bool]
 fromB cb = Comp [|| getInt $$cb ||] :* Comp [|| getCh $$cb ||] :* Comp [|| getBool $$cb ||] :* Nil
@@ -199,12 +208,12 @@ instance SListI '[] where
 instance SListI xs => SListI (x : xs) where
   sList = SCons
 
-class AllF c xs => All (c :: k -> Constraint) xs
-instance AllF c xs => All c xs
+class (AllF c xs, SListI xs) => All (c :: k -> Constraint) xs
+instance (AllF c xs, SListI xs) => All c xs
 
 type family AllF (c :: k -> Constraint) (xs :: [k]) :: Constraint where
   AllF c '[] = ()
-  AllF c (x : xs) = (c x, AllF c xs)
+  AllF c (x : xs) = (c x, SListI xs, AllF c xs)
 
 newtype K a b = K { unK :: a }
 newtype I a   = I { unI :: a }
@@ -238,6 +247,10 @@ ocpure_NP p =
   case sList @_ @xs of
     SNil  -> Nil
     SCons -> p :* ocpure_NP @c p
+
+cpure_POP :: forall c xss f . (All (All c) xss, SListI xss) => (forall x . c x => f x) -> POP f xss
+cpure_POP p =
+  POP (ocpure_NP @(All c) (ocpure_NP @c p))
 
 {-
 map_NP :: forall xs f g . (SListI xs) => Code (Fun1 f g -> NP f xs -> NP g xs)
@@ -331,6 +344,9 @@ cgenum :: (Generic a, Lift a, SListI (Description a), All ((~) '[]) (Description
 cgenum = buildlist (to <$> apInjs_POP (POP (ocpure_NP @((~) '[]) Nil)))
 
 data R = R { _ra :: A, _rb :: B, _rc :: C }
+
+instance HasDatatypeInfo R where
+  datatypeInfo = [("R", 3)]
 
 instance Generic R where
   type Description R = '[ '[ A, B, C ] ]
