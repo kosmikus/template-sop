@@ -27,6 +27,7 @@ import Language.Haskell.TH hiding (Type)
 import Language.Haskell.TH.Syntax hiding (Type)
 
 type Code a = Q (TExp a)
+type CodeF = Q :.: TExp
 
 data NP (f :: k -> Type) :: [k] -> Type where
   Nil :: NP f '[]
@@ -42,7 +43,7 @@ newtype (f :.: g) x = Comp { unComp :: f (g x) }
 
 newtype SOP (f :: k -> Type) (xss :: [[k]]) = SOP (NS (NP f) xss)
 
-np :: NP (Q :.: TExp) xs -> Code (NP I xs)
+np :: NP CodeF xs -> Code (NP I xs)
 np Nil            = [|| Nil ||]
 np (Comp c :* cs) = [|| I $$c :* $$(np cs) ||]
 
@@ -56,7 +57,7 @@ collapse_NP' :: Code (a -> r -> r) -> Code r -> NP (K (Code a)) xs -> Code r
 collapse_NP' cons nil Nil         = nil
 collapse_NP' cons nil (K a :* xs) = [|| $$cons $$a $$(collapse_NP' cons nil xs) ||]
 
-ns :: NS ((Q :.: TExp) :.: f) xs -> Code (NS f xs)
+ns :: NS (CodeF :.: f) xs -> Code (NS f xs)
 ns (Z (Comp (Comp c))) = [|| Z $$c ||]
 ns (S x)               = [|| S $$(ns x) ||]
 
@@ -86,7 +87,7 @@ map_SOP f (SOP x) = SOP (map_NS (map_NP f) x)
 cmap_SOP :: forall c f g xss . All (All c) xss => (forall x . c x => f x -> g x) -> SOP f xss -> SOP g xss
 cmap_SOP f (SOP x) = SOP (cmap_NS @(All c) (cmap_NP @c f) x)
 
-sop :: SOP (Q :.: TExp) xss -> Code (SOP I xss)
+sop :: SOP CodeF xss -> Code (SOP I xss)
 sop (SOP x) = [|| SOP $$(ns (map_NS (\ y -> Comp (Comp (np y))) x)) ||]
 
 collapse_SOP :: SOP (K (Code a)) xss -> Code [a]
@@ -102,13 +103,13 @@ fromA (MkA1 i c b) = SOP (Z (I i :* I c :* I b :* Nil))
 fromA (MkA2 d)     = SOP (S (Z (I d :* Nil)))
 -}
 
-fromA1 :: Code Int -> Code Char -> Code Bool -> SOP (Q :.: TExp) '[ '[Int, Char, Bool], '[Double] ]
+fromA1 :: Code Int -> Code Char -> Code Bool -> SOP CodeF '[ '[Int, Char, Bool], '[Double] ]
 fromA1 i c b = SOP (Z (Comp i :* Comp c :* Comp b :* Nil))
 
-fromA2 :: Code Double -> SOP (Q :.: TExp) '[ '[Int, Char, Bool], '[Double] ]
+fromA2 :: Code Double -> SOP CodeF '[ '[Int, Char, Bool], '[Double] ]
 fromA2 d = SOP (S (Z (Comp d :* Nil)))
 
-fromA :: Code A -> (SOP (Q :.: TExp) '[ '[Int, Char, Bool], '[Double] ] -> Code r) -> Code r
+fromA :: Code A -> (SOP CodeF '[ '[Int, Char, Bool], '[Double] ] -> Code r) -> Code r
 fromA a k =
   [|| case $$a of
         MkA1 i c b -> $$(k (fromA1 [|| i ||] [|| c ||] [|| b ||]))
@@ -117,13 +118,13 @@ fromA a k =
 
 class Generic a where
   type Description a :: [[Type]]
-  from :: Code a -> (SOP (Q :.: TExp) (Description a) -> Code r) -> Code r
+  from :: Code a -> (SOP CodeF (Description a) -> Code r) -> Code r
 
 instance Generic A where
   type Description A = '[ '[Int, Char, Bool], '[Double] ]
   from = fromA
 
-fromB :: Code B -> NP (Q :.: TExp) '[Int, Char, Bool]
+fromB :: Code B -> NP CodeF '[Int, Char, Bool]
 fromB cb = Comp [|| getInt $$cb ||] :* Comp [|| getCh $$cb ||] :* Comp [|| getBool $$cb ||] :* Nil
 
 data SList (xs :: [k]) :: Type where
