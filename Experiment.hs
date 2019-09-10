@@ -14,9 +14,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Experiment where
 
 import Language.Haskell.TH
+import Language.Haskell.TH.Syntax
 import NP
 
 countA :: A -> Int
@@ -40,8 +42,8 @@ compareA = $$gcompare
 compareC :: C -> C -> Ordering
 compareC = $$gcompare
 
-gfrom :: C
-gfrom  = $($(genFrom @R undefined) [| C1 |] undefined)
+gfrom :: Code A -> (SOP CodeF (Description A) -> Code r) -> Code r
+gfrom c k = unsafeTExpCoerce $ $(genFrom @A) (unTypeQ c) (unTypeQ . k)
 
 --
 -- dumb (MkA1 i c b) = sum [1, 1, 1]
