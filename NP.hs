@@ -18,6 +18,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
+{-# LANGUAGE ViewPatterns #-}
 module NP where
 
 import Data.Kind
@@ -313,6 +314,8 @@ instance Generic R where
     [|| case $$r of
            R ra rb rc -> $$(k (SOP (Z (Comp [|| ra ||] :* Comp [|| rb ||] :* Comp [|| rc ||] :* Nil))))
     ||]
+
+  to (unZ . unSOP  -> (Comp ra :* Comp rb :* Comp rc :* Nil)) = [|| R $$ra $$rb $$rc ||]
 
 ra :* rb :* rc :* Nil = oggetters @R
 
