@@ -24,6 +24,16 @@ countA = $$gcount
 
 showA :: A -> String
 showA = $$gshow
+
+enumC :: [C]
+enumC = $$cgenum
+
+gettersR :: NP ((->) R) '[ A, B, C ]
+gettersR = $$ggetters
+
+settersR :: NP (Setter' R) '[ A, B, C ]
+settersR = $$gsetters
+
 --
 -- dumb (MkA1 i c b) = sum [1, 1, 1]
 -- dumb (MkA2 d)     = sum [1]
