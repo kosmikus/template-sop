@@ -26,6 +26,7 @@ import Data.Proxy
 import GHC.Exts (build)
 import Language.Haskell.TH hiding (Type)
 import Language.Haskell.TH.Syntax hiding (Type)
+import Language.Haskell.TH.Lib
 
 type Code a = Q (TExp a)
 type CodeF = Q :.: TExp
@@ -166,6 +167,23 @@ class Generic a where
   from :: Code a -> (SOP CodeF (Description a) -> Code r) -> Code r
   oto :: SOP I (Description a) -> a
   to :: SOP CodeF (Description a) -> Code a
+
+genFrom :: Generic a => (a -> SOP I (Description a))
+        -> Q Exp --Code (Code a -> (SOP CodeF (Description a) -> Code r) -> Code r)
+genFrom f =
+  let
+--    fake = oto (pure_NP (I undefined))
+
+
+  in
+    [| \a k ->
+          let dtinfo = [("R", 1)]
+          in caseE a (map mkMatches dtinfo) |]
+
+mkMatches :: (String, Int) -> MatchQ
+mkMatches (s, i) = match (conP (mkName s) [varP $ mkName ("a" ++ show i) | i <- [1..i]])
+                          (normalB (tupE []))
+                          []
 
 {-
 from' :: forall a r . Generic a => Code a -> (SOP CodeF (Description a) -> Code r) -> Code r

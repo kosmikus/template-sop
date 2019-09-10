@@ -40,6 +40,9 @@ compareA = $$gcompare
 compareC :: C -> C -> Ordering
 compareC = $$gcompare
 
+gfrom :: C
+gfrom  = $($(genFrom @R undefined) [| C1 |] undefined)
+
 --
 -- dumb (MkA1 i c b) = sum [1, 1, 1]
 -- dumb (MkA2 d)     = sum [1]
