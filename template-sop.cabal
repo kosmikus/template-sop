@@ -1,0 +1,16 @@
+name: template-sop
+version: 0.1
+cabal-version: >= 2.0
+build-type: Simple
+
+library
+  hs-source-dirs: src
+  default-language: Haskell2010
+  build-depends:
+    base,
+    generics-sop,
+    template-haskell
+  exposed-modules:
+    Generics.SOP.Syntax
+    Generics.SOP.ExampleFunctions
+    Generics.SOP.ExampleTypes
