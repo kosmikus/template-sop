@@ -60,3 +60,19 @@ newtype Setter' f xs a = Setter' (f a -> NP f xs -> NP f xs)
 shiftSetter :: Setter' f xs a -> Setter' f (x : xs) a
 shiftSetter (Setter' f) = Setter' (\ y (x :* xs) -> x :* f y xs)
 
+
+gcompare :: (GenericSyntax a, All (All Ord) (Code a)) => Syntax (a -> a -> Ordering)
+gcompare =
+  [|| \ x y -> $$(sfrom [|| x ||] (\ x' -> sfrom [|| y ||] (\ y' -> go (unSOP x') (unSOP y')))) ||]
+  where
+    go :: forall xss . All (All Ord) xss => NS (NP SyntaxF) xss -> NS (NP SyntaxF) xss -> Syntax Ordering
+    go (Z x) (Z y) =
+      sapply [|| foldr (<>) EQ ||]
+             (syntactifyList
+             (collapse_NP
+              (czipWith_NP (Proxy @Ord) (\ (Comp a) (Comp b) -> K [|| compare $$a $$b ||])
+              x
+              y)))
+    go (Z _) (S _) = [|| LT ||]
+    go (S _) (Z _) = [|| GT ||]
+    go (S x) (S y) = go x y

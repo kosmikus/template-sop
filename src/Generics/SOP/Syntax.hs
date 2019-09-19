@@ -49,3 +49,6 @@ senumTypeFrom aSyntax k = sfrom aSyntax (k . map_NS (const (K ())) . unSOP)
 senumTypeTo :: (IsEnumType a, GenericSyntax a) => NS (K ()) (Code a) -> Syntax a
 senumTypeTo ns = sto (SOP (cmap_NS (Proxy @((~) '[])) (const Nil) ns))
 
+sapply :: Syntax (a -> b) -> Syntax a -> Syntax b
+sapply cf cx = [|| $$cf $$cx ||]
+
