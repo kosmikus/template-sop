@@ -11,54 +11,80 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
+
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
+
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 module Generics.SOP.ExampleFunctions where
 
 import Generics.SOP
 import Generics.SOP.NP
-import Generics.SOP.Syntax
 import Generics.SOP.Universe
 import qualified GHC.Generics as GHC
 
--- | Classic generic enum.
-genum :: (IsEnumType a) => [a]
-genum = enumTypeTo <$> apInjs_NP (pure_NP (K ()))
+import Generics.SOP
+import Generics.SOP.NP
+import Generics.SOP.NS
+import Generics.SOP.Universe
+import qualified GHC.Generics as GHC
+import Language.Haskell.TH
 
--- | Specialised generic enum.
-sgenum :: (IsEnumType a, GenericSyntax a) => Syntax [a]
-sgenum = syntactifyList (senumTypeTo <$> apInjs_NP (pure_NP (K ())))
+type Syntax a = Q (TExp a)
+type SyntaxF = Q :.: TExp
 
-newtype Setter s a = Setter (a -> s -> s)
+syntactifyList :: [Syntax a] -> Syntax [a]
+syntactifyList [] = [|| [] ||]
+syntactifyList (x : xs) = [|| $$x : $$(syntactifyList xs) ||]
 
--- | Classic generic setters.
-gsetters :: (IsProductType s xs) => NP (Setter s) xs
-gsetters =
-  map_NP
-    (\ (Setter' f) ->
-      Setter (\ a s ->
-        productTypeTo (f (I a) (productTypeFrom s))))
-    npSetters
+syntactifyNP :: NP (SyntaxF :.: f) xs -> Syntax (NP f xs)
+syntactifyNP Nil = [|| Nil ||]
+syntactifyNP (Comp (Comp x) :* xs) = [|| $$x :* $$(syntactifyNP xs) ||]
 
--- | Syntactic generic setters.
-sgsetters :: (IsProductType s xs, GenericSyntax s) => Syntax (NP (Setter s) xs)
-sgsetters =
-  syntactifyNP (map_NP
-    (\ (Setter' f) ->
-      Comp (Comp
-        [|| Setter (\ a s ->
-              $$(sproductTypeFrom [|| s ||]
-                  (\ s' -> sproductTypeTo (f (Comp [|| a ||]) s'))))
-        ||]))
-    npSetters)
+class Generic a => GenericSyntax a where
+  sfrom :: Syntax a -> (SOP SyntaxF (Code a) -> Syntax r) -> Syntax r
+  sto   :: SOP SyntaxF (Code a) -> Syntax a
 
-npSetters :: forall xs f . (SListI xs) => NP (Setter' f xs) xs
-npSetters = case sList @xs of
-  SNil  -> Nil
-  SCons -> Setter' (\ x (_ :* xs) -> x :* xs) :* map_NP shiftSetter npSetters
+sapply :: Syntax (a -> b) -> Syntax a -> Syntax b
+sapply cf cx = [|| $$cf $$cx ||]
 
-newtype Setter' f xs a = Setter' (f a -> NP f xs -> NP f xs)
 
-shiftSetter :: Setter' f xs a -> Setter' f (x : xs) a
-shiftSetter (Setter' f) = Setter' (\ y (x :* xs) -> x :* f y xs)
+data BinTree a =
+  Tip | Bin (BinTree a) a (BinTree a)
+  deriving (GHC.Generic, Generic)
+
+instance GenericSyntax (BinTree a) where
+  sfrom treeSyntax k =
+    [|| case $$treeSyntax of
+          Tip       -> $$(k (SOP (Z Nil)))
+          Bin l x r -> $$(k (SOP (S (Z (Comp [|| l ||] :* Comp [|| x ||] :* Comp [|| r ||] :* Nil)))))
+    ||]
+
+  sto (SOP (Z Nil)) = [|| Tip ||]
+  sto (SOP (S (Z (Comp l :* Comp x :* Comp r :* Nil)))) = [|| Bin $$l $$x $$r ||]
 
 
 gcompare :: (GenericSyntax a, All (All Ord) (Code a)) => Syntax (a -> a -> Ordering)
