@@ -11,6 +11,5 @@ library
     generics-sop,
     template-haskell
   exposed-modules:
-    Generics.SOP.Syntax
     Generics.SOP.ExampleFunctions
-    Generics.SOP.ExampleTypes
+    Generics.SOP.Ryan

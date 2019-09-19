@@ -71,10 +71,9 @@ class Generic a => GenericSyntax a where
 sapply :: Syntax (a -> b) -> Syntax a -> Syntax b
 sapply cf cx = [|| $$cf $$cx ||]
 
-
 data BinTree a =
-  Tip | Bin (BinTree a) a (BinTree a)
-  deriving (GHC.Generic, Generic)
+  Tip | Bin a a a
+  deriving (GHC.Generic, Generic, Eq)
 
 instance GenericSyntax (BinTree a) where
   sfrom treeSyntax k =
