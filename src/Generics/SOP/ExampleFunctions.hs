@@ -13,8 +13,11 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 module Generics.SOP.ExampleFunctions where
 
+import Control.DeepSeq
+
 import Generics.SOP
 import Generics.SOP.NP
+import Generics.SOP.NS
 import Generics.SOP.Syntax
 import Generics.SOP.Universe
 import qualified GHC.Generics as GHC
@@ -60,6 +63,17 @@ newtype Setter' f xs a = Setter' (f a -> NP f xs -> NP f xs)
 shiftSetter :: Setter' f xs a -> Setter' f (x : xs) a
 shiftSetter (Setter' f) = Setter' (\ y (x :* xs) -> x :* f y xs)
 
+geq :: (GenericSyntax a, All (All Eq) (Code a)) => Syntax (a -> a -> Bool)
+geq =
+  [|| \ x y -> $$(sfrom [|| x ||] (\ x' -> sfrom [|| y ||] (\ y' ->
+    ccompare_SOP
+      (Proxy @Eq)
+      [|| False ||]
+      (\ a b -> (sapply [|| and ||] . syntactifyList . collapse_NP) (czipWith_NP (Proxy @Eq) (\ (Comp c) (Comp d) -> K [|| $$c == $$d ||]) a b))
+      [|| False ||]
+      x' y'
+    )))
+  ||]
 
 gcompare :: (GenericSyntax a, All (All Ord) (Code a)) => Syntax (a -> a -> Ordering)
 gcompare =
@@ -76,3 +90,10 @@ gcompare =
     go (Z _) (S _) = [|| LT ||]
     go (S _) (Z _) = [|| GT ||]
     go (S x) (S y) = go x y
+
+grnf :: (GenericSyntax a, All (All NFData) (Code a)) => Syntax (a -> ())
+grnf =
+  [|| \ x -> $$(sfrom [|| x ||] $ \ x' ->
+    sapply [|| rnf ||] (syntactifyList (collapse_SOP (cmap_SOP (Proxy @NFData) (K . sapply [|| rnf ||] . unComp) x')))
+    )
+  ||]
