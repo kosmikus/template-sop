@@ -21,6 +21,7 @@ import Generics.SOP.NS
 import Generics.SOP.Syntax
 import Generics.SOP.Universe
 import qualified GHC.Generics as GHC
+import Language.Haskell.TH.Syntax
 
 -- | Classic generic enum.
 genum :: (IsEnumType a) => [a]
@@ -97,3 +98,10 @@ grnf =
     sapply [|| rnf ||] (syntactifyList (collapse_SOP (cmap_SOP (Proxy @NFData) (K . sapply [|| rnf ||] . unComp) x')))
     )
   ||]
+
+-- Need 8.10 for this unit of a function to be in the Lift class
+liftTyped :: Lift a => a -> Q (TExp a)
+liftTyped = unsafeTExpCoerce . lift
+
+glift :: (Generic a, GenericSyntax a, All (All Lift) (Code a)) => a -> Syntax a
+glift x = sto (cmap_SOP (Proxy @Lift) (\(I a) -> Comp (liftTyped a)) (from x))
