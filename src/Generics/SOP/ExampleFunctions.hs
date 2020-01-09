@@ -105,3 +105,11 @@ liftTyped = unsafeTExpCoerce . lift
 
 glift :: (Generic a, GenericSyntax a, All (All Lift) (Code a)) => a -> Syntax a
 glift x = sto (cmap_SOP (Proxy @Lift) (\(I a) -> Comp (liftTyped a)) (from x))
+
+glift2 :: forall a . (Generic a, GenericSyntax a, All (All Lift) (Code a)) => Syntax (a -> Syntax a)
+glift2 = [|| \x -> $$(sfrom [|| x ||] (\sop -> sto' (cmap_SOP (Proxy @Lift) (\(Comp c) -> q [|| Comp (liftTyped $$c) ||]) sop))) ||]
+
+q :: a (b ((c :.: d) e)) -> ((a :.: b) :.: (c :.: d)) e
+q f = Comp (Comp f)
+
+

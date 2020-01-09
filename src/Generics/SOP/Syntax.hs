@@ -34,6 +34,9 @@ syntactifyNP (Comp (Comp x) :* xs) = [|| $$x :* $$(syntactifyNP xs) ||]
 class Generic a => GenericSyntax a where
   sfrom :: Syntax a -> (SOP SyntaxF (Code a) -> Syntax r) -> Syntax r
   sto   :: SOP SyntaxF (Code a) -> Syntax a
+  sto'   :: SOP (SyntaxF :.: SyntaxF) (Code a) -> Syntax (Syntax a)
+
+
 
 sproductTypeFrom ::
   (IsProductType a xs, GenericSyntax a) =>
@@ -51,4 +54,5 @@ senumTypeTo ns = sto (SOP (cmap_NS (Proxy @((~) '[])) (const Nil) ns))
 
 sapply :: Syntax (a -> b) -> Syntax a -> Syntax b
 sapply cf cx = [|| $$cf $$cx ||]
+
 

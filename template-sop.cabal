@@ -10,7 +10,8 @@ library
     base,
     deepseq,
     generics-sop,
-    template-haskell
+    template-haskell,
+    th-orphans
   exposed-modules:
     Generics.SOP.Syntax
     Generics.SOP.ExampleFunctions

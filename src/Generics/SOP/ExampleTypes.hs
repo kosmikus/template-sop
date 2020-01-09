@@ -41,6 +41,11 @@ instance GenericSyntax ABC where
   sto (SOP (S (Z Nil))) = [|| B ||]
   sto (SOP (S (S (Z Nil)))) = [|| C ||]
 
+  sto' (SOP (Z Nil)) = [|| sto (SOP (Z Nil)) ||]
+  sto' (SOP (S (Z Nil))) = [|| sto (SOP ((S (Z Nil)))) ||]
+  sto' (SOP (S (S (Z Nil)))) = [|| sto (SOP (S (S (Z Nil)))) ||]
+
+
 instance GenericSyntax Rec where
   sfrom recSyntax k =
     [|| case $$recSyntax of
