@@ -10,8 +10,11 @@ library
     base,
     deepseq,
     generics-sop,
-    template-haskell
+    template-haskell,
+    th-abstraction,
+    th-lift
   exposed-modules:
     Generics.SOP.Syntax
+    Generics.SOP.Syntax.TH
     Generics.SOP.ExampleFunctions
     Generics.SOP.ExampleTypes
