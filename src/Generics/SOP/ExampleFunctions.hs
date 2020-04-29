@@ -33,6 +33,13 @@ sgenum = syntactifyList (senumTypeTo <$> apInjs_NP (pure_NP (K ())))
 
 newtype Setter s a = Setter (a -> s -> s)
 
+-- | Syntactic semigroup append.
+sgappend :: (GenericSyntax a, IsProductType a xs, All Semigroup xs) => Syntax a -> Syntax a -> Syntax a
+sgappend a1 a2 =
+  sproductTypeFrom a1 $ \ a1' -> sproductTypeFrom a2 $ \ a2' ->
+     sproductTypeTo
+       (czipWith_NP (Proxy @Semigroup) (mapQQQ [|| (<>) ||]) a1' a2')
+
 -- | Classic generic setters.
 gsetters :: (IsProductType s xs) => NP (Setter s) xs
 gsetters =

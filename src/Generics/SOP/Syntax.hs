@@ -52,3 +52,5 @@ senumTypeTo ns = sto (SOP (cmap_NS (Proxy @((~) '[])) (const Nil) ns))
 sapply :: Syntax (a -> b) -> Syntax a -> Syntax b
 sapply cf cx = [|| $$cf $$cx ||]
 
+mapQQQ :: Syntax (a -> b -> c) -> SyntaxF a -> SyntaxF b -> SyntaxF c
+mapQQQ f (Comp a) (Comp b) = Comp [|| $$f $$a $$b ||]
