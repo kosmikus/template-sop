@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -107,8 +108,10 @@ grnf =
   ||]
 
 -- Need 8.10 for this unit of a function to be in the Lift class
+#if !MIN_VERSION_base(4,14,0)
 liftTyped :: Lift a => a -> Q (TExp a)
 liftTyped = unsafeTExpCoerce . lift
+#endif
 
 glift :: (Generic a, GenericSyntax a, All (All Lift) (Code a)) => a -> Syntax a
 glift x = sto (cmap_SOP (Proxy @Lift) (\(I a) -> Comp (liftTyped a)) (from x))
