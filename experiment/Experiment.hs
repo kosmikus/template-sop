@@ -15,11 +15,14 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Experiment where
+module Main where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
+import NPMIN ()
 import NP
+import NPCompare
+
 
 countA :: A -> Int
 countA = $$gcount
@@ -27,27 +30,34 @@ countA = $$gcount
 showA :: A -> String
 showA = $$gshow
 
+--main = putStrLn (showA (MkA1 0 'a' True))
+
+main = print $ compareA (MkA1 0 'a' True) (MkA2 0)
+
 enumC :: [C]
 enumC = $$cgenum
 
-gettersR :: NP ((->) R) '[ A, B, C ]
-gettersR = $$ggetters
-
-settersR :: NP (Setter' R) '[ A, B, C ]
-settersR = $$gsetters
-
+{-# INLINE compareA #-}
 compareA :: A -> A -> Ordering
 compareA = $$gcompare
 
 compareC :: C -> C -> Ordering
 compareC = $$gcompare
 
+gettersR :: NPG ((->) R) '[ A, B, C ]
+gettersR = $$ggetters
+
+settersR :: NPG (Setter' R) '[ A, B, C ]
+settersR = $$gsetters
+
+{-
+
 gfrom :: Code A -> (SOP CodeF (Description A) -> Code r) -> Code r
 gfrom c k = unsafeTExpCoerce $ $(genFrom @A) (unTypeQ c) (unTypeQ . k)
 
 caseA :: NP ((NP I -.-> K r)) (Description A) -> A -> r
 caseA table = $$(unspillNP [|| table ||] gcase)
-
+-}
 -- caseA (f1 :* f2 :* Nil) a =
 --   case a of
 --     MkA1 i c b -> f1 i c b
