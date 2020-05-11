@@ -176,6 +176,33 @@ collapse_SOP :: SOP (K a) xs -> [a]
 collapse_SOP (SOP (Z xs)) = collapse_NP xs
 collapse_SOP (SOP (S i))  = collapse_SOP (SOP i)
 
+ccompare_NS ::
+     forall c proxy r f g xs .
+     (All c xs)
+  => r                                    -- ^ what to do if first is smaller
+  -> (forall x . c x => f x -> g x -> r)  -- ^ what to do if both are equal
+  -> r                                    -- ^ what to do if first is larger
+  -> NS f xs -> NS g xs
+  -> r
+ccompare_NS lt eq gt = go
+  where
+    go :: forall ys . (All c ys) => NS f ys -> NS g ys -> r
+    go (Z x)  (Z y)  = eq x y
+    go (Z _)  (S _)  = lt
+    go (S _)  (Z _)  = gt
+    go (S xs) (S ys) = go xs ys
+
+ccompare_SOP ::
+     forall c proxy r f g xss .
+     (All (All c) xss)
+  => r                                                  -- ^ what to do if first is smaller
+  -> (forall xs . All c xs => NP f xs -> NP g xs -> r)  -- ^ what to do if both are equal
+  -> r                                                  -- ^ what to do if first is larger
+  -> SOP f xss -> SOP g xss
+  -> r
+ccompare_SOP lt eq gt (SOP xs) (SOP ys) =
+  ccompare_NS @(All c) lt eq gt xs ys
+
 class (LiftT a, SListI (Description a), All SListI (Description a)) => Generic a where
   type Description a :: [[Type]]
   -- ofrom :: a -> SOP I (Description a)
@@ -211,6 +238,12 @@ sgsappend c1 c2 =
         (mapCCC [|| (<>) ||]) a1 a2
       )
 
+sgsappend' ::
+  (IsProductType a xs, All (Quoted Semigroup) xs) =>
+  Code (a -> a -> a)
+sgsappend' =
+  [|| \ a1 a2 -> $$(sgsappend [|| a1 ||] [|| a2 ||]) ||]
+
 mapCCC :: LiftT c => Code (a -> b -> c) -> C a -> C b -> C c
 mapCCC op (C a) (C b) = C [|| $$op $$a $$b ||]
 
@@ -233,6 +266,23 @@ sgShowEnum ::
 sgShowEnum names c =
   enumTypeFrom c $ \ a ->
     liftTyped (collapse_NS (selectWith_NS const names a))
+
+sgeq ::
+  (Generic a, All (All (Quoted Eq)) (Description a)) =>
+  Code a -> Code a -> Code Bool
+sgeq c1 c2 =
+  from c1 $ \ a1 -> from c2 $ \ a2 ->
+  ccompare_SOP @(Quoted Eq)
+    [|| False ||]
+    (\ xs1 xs2 -> sand (collapse_NP (czipWith_NP @(Quoted Eq) (mapCCK [|| (==) ||]) xs1 xs2)))
+    [|| False ||]
+    a1 a2
+
+mapCCK :: LiftT c => Code (a -> b -> c) -> C a -> C b -> K (Code c) x
+mapCCK op (C a) (C b) = K [|| $$op $$a $$b ||]
+
+sand :: [Code Bool] -> Code Bool
+sand = foldr (\ x r -> [|| $$x && $$r ||]) [|| True ||]
 
 data Foo = Foo [Int] Ordering String
 
@@ -274,3 +324,67 @@ instance (LiftT a, LiftT b) => Generic (Pair a b) where
 
   to (SOP (Z (C a :* C b :* Nil))) = [|| Pair $$a $$b ||]
 
+instance Generic Ordering where
+  type Description Ordering = '[ '[], '[], '[] ]
+
+  from c k =
+    [|| case $$c of
+          LT -> $$(k (SOP (Z Nil)))
+          EQ -> $$(k (SOP (S (Z Nil))))
+          GT -> $$(k (SOP (S (S (Z Nil)))))
+    ||]
+
+  to (SOP (Z Nil))         = [|| LT ||]
+  to (SOP (S (Z Nil)))     = [|| EQ ||]
+  to (SOP (S (S (Z Nil)))) = [|| GT ||]
+
+eqList :: (CodeC (Eq a), LiftT a) => Code ([a] -> [a] -> Bool)
+eqList = [|| (==) ||]
+
+data Person = Person { personId :: Int, name :: String, date :: Day }
+
+data Day
+class FromRow a where
+  fromRow :: RowParser a
+class FromField a
+data RowParser a
+field :: FromField a => RowParser a
+field = undefined
+instance Functor RowParser where fmap = undefined
+instance Applicative RowParser where pure = undefined; (<*>) = undefined
+
+sproductTypeToA ::
+  (IsProductType a xs, CodeC (Applicative f)) =>
+  NP (C :.: f) xs -> Code (f a)
+sproductTypeToA =
+  undefined
+
+type family Curry r xs where
+  Curry r '[]      = r
+  Curry r (x : xs) = x -> Curry r xs
+
+newtype SCurry r xs = SCurry { unSCurry :: (NP C xs -> Code r) -> Code (Curry r xs) }
+
+-- I'm giving up on this function for now ...
+-- GHC wants me to prove that `LiftT (Curry r xs)` for all xs.
+--
+{-
+scurry_NP ::
+  forall r xs . All LiftT xs => (NP C xs -> Code r) -> Code (Curry r xs)
+scurry_NP =
+{-
+  unSCurry $ cpara_SList (Proxy @LiftT)
+    (SCurry $ \ f -> f Nil)
+    (\ (SCurry rec) -> SCurry $ \ f -> [|| \ x -> _ ||])
+-}
+  case sList :: SList xs of
+    SNil  -> \ f -> f Nil
+    SCons -> \ f -> [|| \ x -> $$(scurry_NP (\ xs -> f (C [|| x ||] :* xs))) ||]
+-}
+
+sgfromRow ::
+  (IsProductType a xs, All (Quoted FromField) xs) =>
+  Code (RowParser a)
+sgfromRow =
+  sproductTypeToA
+    (cpure_NP @(Quoted FromField) (Comp (C [|| field ||])))
