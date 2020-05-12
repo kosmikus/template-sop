@@ -122,6 +122,13 @@ type family AllF (c :: k -> Constraint) (xs :: [k]) :: Constraint where
   AllF c '[] = ()
   AllF c (x : xs) = (c x, All c xs)
 
+type family AllTails (c :: [k] -> Constraint) (xs :: [k]) :: Constraint where
+  AllTails c xs = (c xs, AllTails' c xs)
+
+type family AllTails' (c :: [k] -> Constraint) (xs :: [k]) :: Constraint where
+  AllTails' c '[] = ()
+  AllTails' c (x : xs) = AllTails c xs
+
 newtype K a b = K { unK :: a }
 newtype I a   = I { unI :: a }
 
@@ -343,21 +350,35 @@ eqList = [|| (==) ||]
 
 data Person = Person { personId :: Int, name :: String, date :: Day }
 
-data Day
+instance Generic Person where
+  type Description Person = '[ '[ Int, String, Day ] ]
+
+  from c k =
+    [|| case $$c of
+          Person i n d -> $$(k (SOP (Z (C [|| i ||] :* C [|| n ||] :* C [|| d ||] :* Nil))))
+    ||]
+
+  to (SOP (Z (C i :* C n :* C d :* Nil))) = [|| Person $$i $$n $$d ||]
+
+data Day = Day
 class FromRow a where
   fromRow :: RowParser a
 class FromField a
-data RowParser a
+data RowParser a = RowParser
 field :: FromField a => RowParser a
-field = undefined
-instance Functor RowParser where fmap = undefined
-instance Applicative RowParser where pure = undefined; (<*>) = undefined
-
-sproductTypeToA ::
-  (IsProductType a xs, CodeC (Applicative f)) =>
-  NP (C :.: f) xs -> Code (f a)
-sproductTypeToA =
-  undefined
+field = RowParser
+{-# NOINLINE field #-}
+instance Functor RowParser where
+  fmap f x = RowParser
+  {-# NOINLINE fmap #-}
+instance Applicative RowParser where
+  pure x = RowParser
+  {-# NOINLINE pure #-}
+  (<*>) x y = RowParser
+  {-# NOINLINE (<*>) #-}
+instance FromField String
+instance FromField Int
+instance FromField Day
 
 type family Curry r xs where
   Curry r '[]      = r
@@ -365,25 +386,29 @@ type family Curry r xs where
 
 newtype SCurry r xs = SCurry { unSCurry :: (NP C xs -> Code r) -> Code (Curry r xs) }
 
--- I'm giving up on this function for now ...
--- GHC wants me to prove that `LiftT (Curry r xs)` for all xs.
---
-{-
+class (LiftT (Curry r xs)) => LiftTCurry r xs
+instance (LiftT (Curry r xs)) => LiftTCurry r xs
+
 scurry_NP ::
-  forall r xs . All LiftT xs => (NP C xs -> Code r) -> Code (Curry r xs)
+  forall r xs . (All LiftT xs, AllTails (LiftTCurry r) xs) =>
+  (NP C xs -> Code r) -> Code (Curry r xs)
 scurry_NP =
-{-
-  unSCurry $ cpara_SList (Proxy @LiftT)
-    (SCurry $ \ f -> f Nil)
-    (\ (SCurry rec) -> SCurry $ \ f -> [|| \ x -> _ ||])
--}
   case sList :: SList xs of
     SNil  -> \ f -> f Nil
     SCons -> \ f -> [|| \ x -> $$(scurry_NP (\ xs -> f (C [|| x ||] :* xs))) ||]
--}
+
+sproductTypeToA ::
+  forall a f xs . (IsProductType a xs, Quoted Applicative f, AllTails (LiftTCurry a) xs) =>
+  NP (C :.: f) xs -> Code (f a)
+sproductTypeToA =
+  go [|| pure $$(scurry_NP (productTypeTo @a)) ||]
+  where
+    go :: forall ys . (All LiftT ys, AllTails (LiftTCurry a) ys) => Code (f (Curry a ys)) -> NP (C :.: f) ys -> Code (f a)
+    go acc Nil                  = acc
+    go acc (Comp (C fx) :* fxs) = go [|| $$acc <*> $$fx ||] fxs
 
 sgfromRow ::
-  (IsProductType a xs, All (Quoted FromField) xs) =>
+  (IsProductType a xs, All (Quoted FromField) xs, AllTails (LiftTCurry a) xs) =>
   Code (RowParser a)
 sgfromRow =
   sproductTypeToA

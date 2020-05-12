@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell #-}
-module Instantiations where
+module Instantiations (fromRow_Person) where
 
 import Data.Functor.Identity
 import SOP
@@ -29,5 +29,8 @@ showEnum_Ordering :: Ordering -> String
 showEnum_Ordering o =
   $$(sgShowEnum (K "<" :* K "=" :* K ">=" :* Nil) [|| o ||])
 
-test :: [Int] -> [Int] -> Bool
-test = $$eqList
+fromRow_Person :: RowParser Person
+fromRow_Person = $$(sgfromRow)
+
+-- test :: [Int] -> [Int] -> Bool
+-- test = $$eqList
