@@ -86,7 +86,7 @@ data SList :: [k] -> Type where
   SNil  :: SList '[]
   SCons :: SListI xs => SList (x ': xs)
 
-class (AllF c xs) => All (c :: k -> Constraint) xs where
+class AllF c xs => All (c :: k -> Constraint) xs where
   cpara_SList ::
        proxy c
     -> r '[]
@@ -251,7 +251,7 @@ sgsappend' ::
 sgsappend' =
   [|| \ a1 a2 -> $$(sgsappend [|| a1 ||] [|| a2 ||]) ||]
 
-mapCCC :: LiftT c => Code (a -> b -> c) -> C a -> C b -> C c
+mapCCC :: (LiftT a, LiftT b, LiftT c) => Code (a -> b -> c) -> C a -> C b -> C c
 mapCCC op (C a) (C b) = C [|| $$op $$a $$b ||]
 
 class NFData a where
@@ -265,7 +265,7 @@ sgrnf c =
     foldr (\ x r -> [|| $$x `seq` $$r ||]) [|| () ||]
       (collapse_SOP (cmap_SOP @(Quoted NFData) (mapCK [|| rnf ||]) a))
 
-mapCK :: LiftT b => Code (a -> b) -> C a -> K (Code b) x
+mapCK :: (LiftT a, LiftT b) => Code (a -> b) -> C a -> K (Code b) x
 mapCK op (C a) = K [|| $$op $$a ||]
 
 sgShowEnum ::
@@ -285,7 +285,7 @@ sgeq c1 c2 =
     [|| False ||]
     a1 a2
 
-mapCCK :: LiftT c => Code (a -> b -> c) -> C a -> C b -> K (Code c) x
+mapCCK :: (LiftT a, LiftT b, LiftT c) => Code (a -> b -> c) -> C a -> C b -> K (Code c) x
 mapCCK op (C a) (C b) = K [|| $$op $$a $$b ||]
 
 sand :: [Code Bool] -> Code Bool
